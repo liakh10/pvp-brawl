@@ -33,6 +33,7 @@ img{display:block;max-width:100%}
 .key:hover{border-color:var(--neon);transform:translateY(-1px)}
 .key.go{background:var(--neon);border-color:var(--neon);color:#07100a}
 .key img{width:15px;height:15px;object-fit:contain}
+.key.go img{filter:brightness(0)}
 .key.x{width:38px;padding:0}
 /* scrub */
 .scrub{position:relative;height:480vh}
@@ -47,9 +48,6 @@ img{display:block;max-width:100%}
 .endline{position:absolute;left:0;right:0;bottom:calc(var(--pad) + 36px);text-align:center;pointer-events:none;opacity:0;padding:0 var(--pad)}
 .endline b{font-family:"Lilita One",sans-serif;font-weight:400;font-size:clamp(26px,4.4vw,56px);line-height:1;text-shadow:0 4px 0 #000;display:block}
 .endline span{display:inline-block;margin-top:10px;font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:var(--neon)}
-.hint{position:absolute;left:50%;bottom:18px;transform:translateX(-50%);width:26px;height:40px;border:2px solid rgba(247,240,222,.6);border-radius:14px;pointer-events:none}
-.hint:after{content:"";position:absolute;left:50%;top:7px;width:4px;height:8px;margin-left:-2px;border-radius:2px;background:var(--cream);animation:wheel 1.6s ease-in-out infinite}
-@keyframes wheel{0%{opacity:0;transform:translateY(0)}30%{opacity:1}100%{opacity:0;transform:translateY(12px)}}
 /* arena */
 section.s{position:relative;padding:clamp(56px,8vw,110px) var(--pad)}
 .in{width:min(1200px,100%);margin:0 auto}
@@ -143,7 +141,7 @@ footer{padding:22px var(--pad) 32px;display:flex;justify-content:space-between;g
   .runner .tag{display:none}
 }
 @media (max-width:520px){ .keys .key.chart{display:none} .mini{grid-template-columns:1fr} }
-@media (prefers-reduced-motion:reduce){ .runner img,.trophy,.hint:after{animation:none} }
+@media (prefers-reduced-motion:reduce){ .runner img,.trophy{animation:none} }
 </style>
 </head>
 <body>
@@ -159,7 +157,6 @@ footer{padding:22px var(--pad) 32px;display:flex;justify-content:space-between;g
       <div class="veil"></div>
       <div class="title" id="title"><h1>PLAYER<span>vs</span>PLAYER</h1><p>Seven memes fight for one glass P</p></div>
       <div class="endline" id="endline"><b>everyone wants the P</b><span>pick a side ↓</span></div>
-      <div class="hint" id="hint"></div>
     </div>
   </section>
 
@@ -171,8 +168,8 @@ footer{padding:22px var(--pad) 32px;display:flex;justify-content:space-between;g
     <div class="board" id="board">
       <svg viewBox="0 0 1000 490" preserveAspectRatio="none" aria-hidden="true">
         <defs><linearGradient id="ag" x1="0" x2="1"><stop offset="0" stop-color="#3bd41a"/><stop offset="1" stop-color="#b6ff8f"/></linearGradient></defs>
-        <path id="track" class="glow" d="M 40 440 L 230 330 L 360 380 L 560 210 L 690 250 L 900 80" fill="none" stroke="url(#ag)" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
-        <path d="M 870 64 L 948 52 L 920 124 Z" fill="#b6ff8f" class="glow"/>
+        <path id="track" class="glow" d="M 40 440 L 230 340 L 360 385 L 560 235 L 690 270 L 900 150" fill="none" stroke="url(#ag)" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M 870 134 L 948 122 L 920 194 Z" fill="#b6ff8f" class="glow"/>
       </svg>
       <img class="trophy" id="trophy" src="/assets/img/trophy.png" alt="The glass P" />
       <div id="runners"></div>
@@ -239,7 +236,7 @@ footer{padding:22px var(--pad) 32px;display:flex;justify-content:space-between;g
     ctx.globalAlpha = 1;
     var t = Math.max(0, 1 - p / .18), e = Math.max(0, Math.min(1, (p - .78) / .16));
     $('title').style.opacity = t; $('title').style.transform = 'translateY(calc(-50% - ' + (1 - t) * 60 + 'px)) scale(' + (1 + (1 - t) * .15) + ')';
-    $('endline').style.opacity = e; $('hint').style.opacity = t;
+    $('endline').style.opacity = e;
   }
   function tick(){ draw(); requestAnimationFrame(tick); }
   addEventListener('resize', size); addEventListener('scroll', draw, { passive: true }); size(); requestAnimationFrame(tick);
@@ -270,7 +267,7 @@ footer{padding:22px var(--pad) 32px;display:flex;justify-content:space-between;g
     var vals = H.map(function(h){ return ST.today[h.id] || 0; }), max = Math.max.apply(null, vals);
     var order = H.slice().sort(function(a, b){ return (ST.today[b.id] || 0) - (ST.today[a.id] || 0); });
     H.forEach(function(h, i){
-      var v = ST.today[h.id] || 0, share = max > 0 ? v / max : 0, t = .06 + .86 * share, pt = track.getPointAtLength(LEN * t);
+      var v = ST.today[h.id] || 0, share = max > 0 ? v / max : 0, t = .06 + .8 * share, pt = track.getPointAtLength(LEN * t);
       var rankIdx = order.indexOf(h), jitter = share < .02 ? (i % 2 ? 26 : -18) : (i % 2 ? 1 : -1) * (6 + (i % 3) * 8);
       var el = $('r-' + h.id); el.style.left = (pt.x * sx + (share < .02 ? (i - 3) * 38 * sx + 90 * sx : 0)) + 'px'; el.style.top = (pt.y * sy + jitter * sy) + 'px';
       el.classList.toggle('lead', max > 0 && rankIdx === 0); el.classList.toggle('me', h.id === pick);
