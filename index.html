@@ -147,7 +147,7 @@ footer{padding:22px var(--pad) 32px;display:flex;justify-content:space-between;g
 <body>
 <header class="hud">
   <a class="logo" href="#top">P<i>V</i>P</a>
-  <div class="keys"><a class="key chart" href="#arena">Arena</a><a class="key go" data-link="pons" href="https://www.ponsfamily.com/launchpad"><img src="/assets/img/pons.png" alt="" />Buy</a><a class="key x" data-link="x" href="https://x.com" aria-label="X"><img src="/assets/img/x.svg" alt="" style="filter:invert(1)" /></a></div>
+  <div class="keys"><a class="key chart" href="#arena">Arena</a><button class="key" id="walletKey">Connect</button><a class="key go" data-link="pons" href="https://www.ponsfamily.com/launchpad"><img src="/assets/img/pons.png" alt="" />Buy</a><a class="key x" data-link="x" href="https://x.com" aria-label="X"><img src="/assets/img/x.svg" alt="" style="filter:invert(1)" /></a></div>
 </header>
 
 <main id="top">
@@ -208,6 +208,7 @@ footer{padding:22px var(--pad) 32px;display:flex;justify-content:space-between;g
 <footer><span data-name>Player vs Player</span><span><a href="/docs">Docs</a></span></footer>
 <div class="lb" id="lb"><div class="lbin"><img id="lbImg" alt="" /><div class="lbbar"><span id="lbN"></span><button id="lbPrev" aria-label="Previous">‹</button><button id="lbNext" aria-label="Next">›</button><button id="lbX" aria-label="Close">✕</button></div></div></div>
 <div class="toast" id="toast"></div>
+<script type="module">import * as W from '/lib/wallet.js'; window.PVPW = W; W.restore();</script>
 
 <script>
 (function(){
@@ -247,8 +248,22 @@ footer{padding:22px var(--pad) 32px;display:flex;justify-content:space-between;g
     { id: 'ainu', name: 'Artificial Inu' }, { id: 'jubjub', name: 'JubJub' }, { id: 'frog', name: 'Robin the Frog' }
   ], byId = {};
   H.forEach(function(h){ byId[h.id] = h; });
-  var KEY = null; try { KEY = localStorage.getItem('pvp:key'); } catch(e) {}
-  if(!/^[a-f0-9]{32}$/.test(KEY || '')){ KEY = Array.from(crypto.getRandomValues(new Uint8Array(16))).map(function(x){ return x.toString(16).padStart(2, '0'); }).join(''); try { localStorage.setItem('pvp:key', KEY); } catch(e) {} }
+  var SESSION = null; try { SESSION = localStorage.getItem('pvp:session'); } catch(e) {}
+  var signing = false;
+  function signIn(){
+    var W = window.PVPW;
+    if(signing) return;
+    if(!W){ toast('Wallet is still loading, try again'); return; }
+    if(!W.wallets().length){ toast('Open this page in a wallet browser or install MetaMask to push'); return; }
+    signing = true; toast('Connect your wallet to push');
+    W.connect()
+      .then(function(){ return fetch('/api/session', { cache: 'no-store' }).then(function(r){ return r.json(); }); })
+      .then(function(n){ if(n.error) throw Error(n.error); return W.sign(n.message).then(function(sig){ return fetch('/api/session', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ address: W.state().address, nonce: n.nonce, signature: sig }) }).then(function(r){ return r.json(); }); }); })
+      .then(function(j){ if(j.error) throw Error(j.error); SESSION = j.session; try { localStorage.setItem('pvp:session', j.session); localStorage.setItem('pvp:addr', j.address); } catch(e) {} paintWallet(); toast('Signed in as ' + W.short(j.address) + ', smash it'); load(); })
+      .catch(function(e){ toast(e && (e.code === 4001 || /reject|denied|cancel/i.test(e.message || '')) ? 'Cancelled in wallet' : ((e && (e.shortMessage || e.message)) || 'Sign-in failed')); })
+      .then(function(){ signing = false; });
+  }
+  function signOut(){ SESSION = null; try { localStorage.removeItem('pvp:session'); localStorage.removeItem('pvp:addr'); } catch(e) {} pending = {}; paintWallet(); load(); }
   var pick = 'cashcat'; try { pick = localStorage.getItem('pvp:hero') || 'cashcat'; } catch(e) {}
   if(!byId[pick]) pick = 'cashcat';
   var ST = { today: {}, top: [], me: { today: 0 }, yesterday: null, msToReset: 0 }, pending = {}, sending = false, t0 = Date.now();
@@ -281,21 +296,24 @@ footer{padding:22px var(--pad) 32px;display:flex;justify-content:space-between;g
     $('rank').innerHTML = order.map(function(h, i){ var v = ST.today[h.id] || 0; return '<div class="' + (h.id === pick ? 'me' : '') + '"><em>' + (i + 1) + '</em><img src="/assets/heroes/' + h.id + '.webp" alt=""><div><b>' + h.name + '</b><div class="bar"><i style="width:' + (v / max * 100) + '%"></i></div></div><span>' + v.toLocaleString('en-US') + '</span></div>'; }).join('');
     $('myToday').textContent = (ST.me.today || 0).toLocaleString('en-US');
     var y = ST.yesterday; $('yking').innerHTML = y ? '<img src="/assets/heroes/' + y.hero + '.webp" alt=""><div><b class="d" style="font-size:20px">' + byId[y.hero].name + '</b><div class="k">' + y.pts.toLocaleString('en-US') + ' pushes</div></div>' : '<span class="k">no king yet · today decides</span>';
-    $('pushers').innerHTML = ST.top.length ? ST.top.map(function(p, i){ var me = p.pid === ST.me.pid; return '<li class="' + (me ? 'me' : '') + '"><span>' + (i + 1) + '. ' + (me ? 'you' : 'player ' + p.pid.slice(0, 6)) + '</span><span>' + p.pts.toLocaleString('en-US') + '</span></li>'; }).join('') : '<li>nobody yet</li>';
+    $('pushers').innerHTML = ST.top.length ? ST.top.map(function(p, i){ var me = p.pid === ST.me.pid; return '<li class="' + (me ? 'me' : '') + '"><span>' + (i + 1) + '. ' + (me ? 'you' : p.pid.slice(0, 6) + '…' + p.pid.slice(-4)) + '</span><span>' + p.pts.toLocaleString('en-US') + '</span></li>'; }).join('') : '<li>nobody yet</li>';
     placeRunners();
   }
   function apply(j){ ST.today = j.today; ST.top = j.top; ST.me = j.me; ST.yesterday = j.yesterday; ST.msToReset = j.msToReset; t0 = Date.now(); for(var k in pending){ ST.today[k] = (ST.today[k] || 0) + pending[k]; ST.me.today += pending[k]; } paint(); }
   function toast(m){ var el = $('toast'); el.textContent = m; el.classList.add('on'); clearTimeout(toast.h); toast.h = setTimeout(function(){ el.classList.remove('on'); }, 2600); }
-  function load(){ fetch('/api/state?key=' + KEY, { cache: 'no-store' }).then(function(r){ return r.json(); }).then(function(j){ if(!j.error) apply(j); }).catch(function(){}); }
+  function paintWallet(){ var a = null; try { a = localStorage.getItem('pvp:addr'); } catch(e) {} $('walletKey').textContent = SESSION && a ? a.slice(0, 6) + '…' + a.slice(-4) + (ST.me && ST.me.weight > 1 ? ' ×' + ST.me.weight : '') : 'Connect'; }
+  $('walletKey').onclick = function(){ if(SESSION){ if(confirm('Sign out of the arena?')) signOut(); } else signIn(); };
+  function load(){ fetch('/api/state' + (SESSION ? '?session=' + SESSION : ''), { cache: 'no-store' }).then(function(r){ return r.json(); }).then(function(j){ if(!j.error) apply(j); }).catch(function(){}); }
   function flush(){
     var hero = Object.keys(pending).filter(function(k){ return pending[k] > 0; })[0];
     if(sending || !hero) return; sending = true; var n = Math.min(40, pending[hero]);
-    fetch('/api/push', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ key: KEY, hero: hero, n: n }) })
-      .then(function(r){ return r.json(); }).then(function(j){ pending[hero] -= n; if(!pending[hero]) delete pending[hero]; if(j.error){ toast(j.error); pending = {}; load(); } else apply(j); })
+    fetch('/api/push', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ session: SESSION, hero: hero, n: n }) })
+      .then(function(r){ return r.json(); }).then(function(j){ pending[hero] -= n; if(!pending[hero]) delete pending[hero]; if(j.auth){ signOut(); toast(j.error); } else if(j.error){ toast(j.error); pending = {}; load(); } else { apply(j); paintWallet(); } })
       .catch(function(){ toast('Connection lost, pushes paused'); pending = {}; })
       .then(function(){ sending = false; });
   }
   function doPush(ev){
+    if(!SESSION){ signIn(); return; }
     pending[pick] = (pending[pick] || 0) + 1; ST.today[pick] = (ST.today[pick] || 0) + 1; ST.me.today = (ST.me.today || 0) + 1;
     var r = $('r-' + pick); r.classList.remove('hit'); void r.offsetWidth; r.classList.add('hit');
     var b = $('board'); if(!RM){ b.classList.remove('shake'); void b.offsetWidth; b.classList.add('shake'); }
